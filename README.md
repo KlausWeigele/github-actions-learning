@@ -29,7 +29,7 @@ This learning project includes:
 - Git
 - GitHub account
 
-### Local Setup
+### Quick Start
 
 1. Clone this repository:
    ```bash
@@ -37,17 +37,28 @@ This learning project includes:
    cd github-actions-learning
    ```
 
-2. Install dependencies:
+2. Launch the interactive learning environment:
+   ```bash
+   ./launch.sh
+   ```
+
+This will give you a menu with all available options including testing, validation, and deployment.
+
+### Manual Setup
+
+If you prefer manual setup:
+
+1. Install dependencies:
    ```bash
    npm install
    ```
 
-3. Run tests:
+2. Run tests:
    ```bash
    npm test
    ```
 
-4. Start the development server:
+3. Start the development server:
    ```bash
    npm run dev
    ```
