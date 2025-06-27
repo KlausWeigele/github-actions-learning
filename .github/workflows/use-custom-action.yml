@@ -1,0 +1,61 @@
+name: Use Custom Action
+
+# This workflow demonstrates using our custom composite action
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+
+jobs:
+  test-with-custom-action:
+    name: Test using Custom Action
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Run setup and test
+        id: custom-test
+        uses: ./.github/actions/setup-and-test
+        with:
+          node-version: '18'
+          test-command: 'npm test -- --silent'
+      
+      - name: Display action outputs
+        run: |
+          echo "Test result: ${{ steps.custom-test.outputs.test-result }}"
+          echo "Node version used: ${{ steps.custom-test.outputs.node-version-used }}"
+
+  test-multiple-versions:
+    name: Test with Node ${{ matrix.node }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: ['16', '18', '20']
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Test with Node ${{ matrix.node }}
+        uses: ./.github/actions/setup-and-test
+        with:
+          node-version: ${{ matrix.node }}
+          install-command: 'npm ci --legacy-peer-deps'
+        continue-on-error: true
+
+  advanced-usage:
+    name: Advanced Custom Action Usage
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Run with custom commands
+        uses: ./.github/actions/setup-and-test
+        with:
+          node-version: '20'
+          install-command: 'npm ci && npm run lint'
+          test-command: 'npm test -- --coverage'

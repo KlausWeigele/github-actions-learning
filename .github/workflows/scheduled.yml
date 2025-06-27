@@ -1,0 +1,117 @@
+name: Scheduled Jobs
+
+# This workflow demonstrates scheduled (cron) jobs
+on:
+  schedule:
+    # Run every day at 2:00 AM UTC
+    - cron: '0 2 * * *'
+    # Run every Monday at 9:00 AM UTC
+    - cron: '0 9 * * 1'
+  
+  # Allow manual triggering for testing
+  workflow_dispatch:
+
+jobs:
+  daily-maintenance:
+    name: Daily Maintenance Tasks
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+      
+      - name: Check for outdated dependencies
+        run: |
+          echo "📦 Checking for outdated dependencies..."
+          npm outdated || true
+      
+      - name: Security audit
+        run: |
+          echo "🔒 Running security audit..."
+          npm audit || true
+      
+      - name: Clean old artifacts
+        run: |
+          echo "🧹 Cleaning old artifacts..."
+          echo "This would clean artifacts older than 30 days in a real scenario"
+      
+      - name: Generate daily report
+        run: |
+          echo "📊 Generating daily report..."
+          echo "Date: $(date)" > daily-report.txt
+          echo "Repository: ${{ github.repository }}" >> daily-report.txt
+          echo "Last commit: ${{ github.sha }}" >> daily-report.txt
+          cat daily-report.txt
+
+  weekly-analysis:
+    name: Weekly Code Analysis
+    runs-on: ubuntu-latest
+    # Only run on Mondays or manual dispatch
+    if: github.event.schedule == '0 9 * * 1' || github.event_name == 'workflow_dispatch'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Get full history for analysis
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Run comprehensive tests
+        run: npm test
+      
+      - name: Generate code metrics
+        run: |
+          echo "📈 Generating code metrics..."
+          echo "Lines of code:"
+          find src -name "*.js" -type f -exec wc -l {} + | tail -n 1
+          echo ""
+          echo "Number of files:"
+          find src -name "*.js" -type f | wc -l
+          echo ""
+          echo "Test coverage summary:"
+          npm test -- --coverage --silent 2>/dev/null | grep -E "(Statements|Branches|Functions|Lines)" || echo "Coverage data will be displayed here"
+      
+      - name: Check commit activity
+        run: |
+          echo "📊 Commit activity for the past week:"
+          git log --since="1 week ago" --oneline --pretty=format:"%h - %an, %ar : %s" || echo "No commits in the past week"
+
+  dependency-update-check:
+    name: Check for Dependency Updates
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+      
+      - name: Check npm updates
+        run: |
+          echo "🔍 Checking for npm package updates..."
+          npx npm-check-updates
+      
+      - name: Create update report
+        run: |
+          echo "📋 Dependency Update Report" > update-report.txt
+          echo "Generated on: $(date)" >> update-report.txt
+          echo "" >> update-report.txt
+          npx npm-check-updates >> update-report.txt 2>&1 || echo "No updates available" >> update-report.txt
+          cat update-report.txt

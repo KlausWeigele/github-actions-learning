@@ -1,0 +1,106 @@
+name: Build and Deploy
+
+# This workflow demonstrates building artifacts and deployment
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:  # Allow manual triggering
+
+env:
+  NODE_VERSION: '18'
+  ARTIFACT_NAME: 'app-build'
+
+jobs:
+  build:
+    name: Build Application
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Run tests
+        run: npm test
+      
+      - name: Build application
+        run: npm run build
+      
+      # Create a deployment package
+      - name: Create deployment package
+        run: |
+          mkdir -p deployment
+          cp -r dist/* deployment/
+          cp package*.json deployment/
+          echo "Build timestamp: $(date)" > deployment/build-info.txt
+          echo "Commit SHA: ${{ github.sha }}" >> deployment/build-info.txt
+      
+      # Upload build artifacts
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ env.ARTIFACT_NAME }}
+          path: deployment/
+          retention-days: 30
+
+  deploy-staging:
+    name: Deploy to Staging
+    needs: build
+    runs-on: ubuntu-latest
+    environment: staging
+    
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: ${{ env.ARTIFACT_NAME }}
+          path: ./deployment
+      
+      - name: Display build info
+        run: cat ./deployment/build-info.txt
+      
+      - name: Simulate deployment to staging
+        run: |
+          echo "🚀 Deploying to staging environment..."
+          echo "Deployment package contents:"
+          ls -la ./deployment/
+          echo "✅ Staging deployment complete!"
+
+  deploy-production:
+    name: Deploy to Production
+    needs: [build, deploy-staging]
+    runs-on: ubuntu-latest
+    environment: production
+    # Only deploy to production from main branch
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: ${{ env.ARTIFACT_NAME }}
+          path: ./deployment
+      
+      - name: Display build info
+        run: cat ./deployment/build-info.txt
+      
+      - name: Simulate deployment to production
+        run: |
+          echo "🚀 Deploying to production environment..."
+          echo "Deployment package contents:"
+          ls -la ./deployment/
+          echo "✅ Production deployment complete!"
+      
+      # Send notification (example with Slack)
+      - name: Send deployment notification
+        run: |
+          echo "📧 Sending deployment notification..."
+          echo "Deployment successful: ${{ github.sha }} to production"

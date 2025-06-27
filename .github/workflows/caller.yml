@@ -1,0 +1,56 @@
+name: Caller Workflow
+
+# This workflow demonstrates how to call the reusable workflow
+on:
+  push:
+    branches: [ feature/* ]
+  pull_request:
+    types: [ opened, synchronize ]
+
+jobs:
+  # Call the reusable workflow with default parameters
+  call-reusable-default:
+    name: Call Reusable Workflow (Default)
+    uses: ./.github/workflows/reusable.yml
+    with:
+      node-version: '18'
+      run-build: true
+      artifact-name: 'default-build'
+  
+  # Call the reusable workflow with custom parameters
+  call-reusable-custom:
+    name: Call Reusable Workflow (Node 20)
+    uses: ./.github/workflows/reusable.yml
+    with:
+      node-version: '20'
+      run-build: false
+      artifact-name: 'node20-build'
+    secrets:
+      npm-token: ${{ secrets.NPM_TOKEN }}
+  
+  # Use outputs from the reusable workflow
+  process-results:
+    name: Process Results
+    needs: [call-reusable-default, call-reusable-custom]
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Display results
+        run: |
+          echo "📊 Workflow Results:"
+          echo "Default workflow test status: ${{ needs.call-reusable-default.outputs.test-status }}"
+          echo "Default workflow build version: ${{ needs.call-reusable-default.outputs.build-version }}"
+          echo "Custom workflow test status: ${{ needs.call-reusable-custom.outputs.test-status }}"
+          echo "Custom workflow build version: ${{ needs.call-reusable-custom.outputs.build-version }}"
+      
+      - name: Download artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: default-build
+          path: ./artifacts/default
+        continue-on-error: true
+      
+      - name: List artifacts
+        run: |
+          echo "📦 Downloaded artifacts:"
+          ls -la ./artifacts/ || echo "No artifacts found"

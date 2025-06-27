@@ -1,0 +1,86 @@
+name: 'Setup and Test'
+description: 'Sets up Node.js environment and runs tests'
+author: 'GitHub Actions Learning Project'
+
+inputs:
+  node-version:
+    description: 'Node.js version to use'
+    required: false
+    default: '18'
+  
+  install-command:
+    description: 'Command to install dependencies'
+    required: false
+    default: 'npm ci'
+  
+  test-command:
+    description: 'Command to run tests'
+    required: false
+    default: 'npm test'
+  
+  cache-dependency-path:
+    description: 'Path to dependency file for caching'
+    required: false
+    default: 'package-lock.json'
+
+outputs:
+  test-result:
+    description: 'Result of the test execution'
+    value: ${{ steps.run-tests.outputs.result }}
+  
+  node-version-used:
+    description: 'The Node.js version that was used'
+    value: ${{ steps.setup-node.outputs.node-version }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup Node.js
+      id: setup-node
+      uses: actions/setup-node@v3
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: 'npm'
+        cache-dependency-path: ${{ inputs.cache-dependency-path }}
+    
+    - name: Display Node.js version
+      shell: bash
+      run: |
+        echo "Using Node.js version: $(node --version)"
+        echo "Using npm version: $(npm --version)"
+        echo "node-version=$(node --version)" >> $GITHUB_OUTPUT
+    
+    - name: Install dependencies
+      shell: bash
+      run: |
+        echo "📦 Installing dependencies..."
+        ${{ inputs.install-command }}
+    
+    - name: Run tests
+      id: run-tests
+      shell: bash
+      run: |
+        echo "🧪 Running tests..."
+        if ${{ inputs.test-command }}; then
+          echo "✅ Tests passed!"
+          echo "result=success" >> $GITHUB_OUTPUT
+        else
+          echo "❌ Tests failed!"
+          echo "result=failure" >> $GITHUB_OUTPUT
+          exit 1
+        fi
+    
+    - name: Generate test summary
+      if: always()
+      shell: bash
+      run: |
+        echo "## Test Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "- Node.js Version: ${{ inputs.node-version }}" >> $GITHUB_STEP_SUMMARY
+        echo "- Install Command: \`${{ inputs.install-command }}\`" >> $GITHUB_STEP_SUMMARY
+        echo "- Test Command: \`${{ inputs.test-command }}\`" >> $GITHUB_STEP_SUMMARY
+        echo "- Result: ${{ steps.run-tests.outputs.result || 'Not completed' }}" >> $GITHUB_STEP_SUMMARY
+
+branding:
+  icon: 'check-circle'
+  color: 'green'

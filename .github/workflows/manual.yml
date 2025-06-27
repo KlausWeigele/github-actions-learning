@@ -1,0 +1,151 @@
+name: Manual Workflow
+
+# This workflow demonstrates manual triggering with inputs
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - development
+          - staging
+          - production
+      
+      version:
+        description: 'Version tag for deployment'
+        required: true
+        default: 'latest'
+        type: string
+      
+      run-tests:
+        description: 'Run tests before deployment'
+        required: false
+        default: true
+        type: boolean
+      
+      log-level:
+        description: 'Log level for debugging'
+        required: false
+        default: 'info'
+        type: choice
+        options:
+          - debug
+          - info
+          - warning
+          - error
+
+jobs:
+  validate-inputs:
+    name: Validate Inputs
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Display workflow inputs
+        run: |
+          echo "🎯 Manual workflow triggered with:"
+          echo "Environment: ${{ inputs.environment }}"
+          echo "Version: ${{ inputs.version }}"
+          echo "Run tests: ${{ inputs.run-tests }}"
+          echo "Log level: ${{ inputs.log-level }}"
+      
+      - name: Validate version format
+        run: |
+          VERSION="${{ inputs.version }}"
+          if [[ "$VERSION" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+$ ]] || [[ "$VERSION" == "latest" ]]; then
+            echo "✅ Valid version format: $VERSION"
+          else
+            echo "❌ Invalid version format: $VERSION"
+            echo "Version should be in format: v1.2.3 or 1.2.3 or 'latest'"
+            exit 1
+          fi
+
+  run-tests:
+    name: Run Tests (Optional)
+    needs: validate-inputs
+    if: ${{ inputs.run-tests == true }}
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Run tests with log level
+        run: |
+          echo "Running tests with log level: ${{ inputs.log-level }}"
+          LOG_LEVEL=${{ inputs.log-level }} npm test
+
+  deploy:
+    name: Deploy to ${{ inputs.environment }}
+    needs: [validate-inputs, run-tests]
+    # Always run deploy after validation, but skip if tests fail
+    if: ${{ always() && needs.validate-inputs.result == 'success' && (needs.run-tests.result == 'success' || needs.run-tests.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Setup deployment environment
+        run: |
+          echo "🔧 Setting up ${{ inputs.environment }} environment..."
+          echo "DEPLOY_ENV=${{ inputs.environment }}" >> $GITHUB_ENV
+          echo "DEPLOY_VERSION=${{ inputs.version }}" >> $GITHUB_ENV
+          
+          # Environment-specific configuration
+          case "${{ inputs.environment }}" in
+            development)
+              echo "API_URL=https://api-dev.example.com" >> $GITHUB_ENV
+              echo "DEBUG=true" >> $GITHUB_ENV
+              ;;
+            staging)
+              echo "API_URL=https://api-staging.example.com" >> $GITHUB_ENV
+              echo "DEBUG=false" >> $GITHUB_ENV
+              ;;
+            production)
+              echo "API_URL=https://api.example.com" >> $GITHUB_ENV
+              echo "DEBUG=false" >> $GITHUB_ENV
+              ;;
+          esac
+      
+      - name: Build application
+        run: |
+          echo "🏗️ Building application for ${{ inputs.environment }}..."
+          echo "Version: ${{ inputs.version }}"
+          npm ci
+          npm run build
+      
+      - name: Deploy to environment
+        run: |
+          echo "🚀 Deploying to ${{ inputs.environment }}..."
+          echo "Deployment configuration:"
+          echo "- Environment: $DEPLOY_ENV"
+          echo "- Version: $DEPLOY_VERSION"
+          echo "- API URL: $API_URL"
+          echo "- Debug mode: $DEBUG"
+          echo ""
+          echo "✅ Deployment simulation complete!"
+      
+      - name: Post-deployment tasks
+        run: |
+          echo "🔍 Running post-deployment checks..."
+          echo "- Health check: PASS"
+          echo "- Smoke tests: PASS"
+          echo "- Performance baseline: ESTABLISHED"
+      
+      - name: Send notification
+        run: |
+          echo "📧 Sending deployment notification..."
+          echo "Successfully deployed version ${{ inputs.version }} to ${{ inputs.environment }}"
