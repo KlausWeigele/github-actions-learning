@@ -1,0 +1,155 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., v1.0.0)'
+        required: true
+        type: string
+
+jobs:
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Get full history for changelog
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Run tests
+        run: npm test
+      
+      - name: Build project
+        run: npm run build
+      
+      - name: Get version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            VERSION="${{ inputs.version }}"
+          else
+            VERSION="${{ github.ref_name }}"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "📦 Creating release for version: $VERSION"
+      
+      - name: Generate changelog
+        id: changelog
+        run: |
+          echo "📝 Generating changelog..."
+          
+          # Get the previous tag
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          
+          if [ -z "$PREVIOUS_TAG" ]; then
+            echo "This is the first release!"
+            COMMITS=$(git log --pretty=format:"- %s (%h)" --no-merges)
+          else
+            echo "Changes since $PREVIOUS_TAG:"
+            COMMITS=$(git log $PREVIOUS_TAG..HEAD --pretty=format:"- %s (%h)" --no-merges)
+          fi
+          
+          # Create changelog
+          cat << EOF > CHANGELOG.md
+          # Release ${{ steps.version.outputs.version }}
+          
+          Released on $(date +'%Y-%m-%d')
+          
+          ## What's Changed
+          
+          $COMMITS
+          
+          ## Contributors
+          
+          $(git log $PREVIOUS_TAG..HEAD --pretty=format:"- @%an" --no-merges | sort -u)
+          
+          ## Full Changelog
+          
+          ${PREVIOUS_TAG:+View the full changelog: https://github.com/${{ github.repository }}/compare/$PREVIOUS_TAG...${{ steps.version.outputs.version }}}
+          EOF
+          
+          cat CHANGELOG.md
+      
+      - name: Create release archive
+        run: |
+          # Create release directory
+          mkdir -p release
+          
+          # Copy built files
+          cp -r dist release/
+          cp package*.json release/
+          cp README.md release/
+          
+          # Create archives
+          tar -czf release-${{ steps.version.outputs.version }}.tar.gz release/
+          zip -r release-${{ steps.version.outputs.version }}.zip release/
+      
+      - name: Create GitHub Release
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const fs = require('fs');
+            const changelog = fs.readFileSync('CHANGELOG.md', 'utf8');
+            
+            const release = await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: '${{ steps.version.outputs.version }}',
+              name: 'Release ${{ steps.version.outputs.version }}',
+              body: changelog,
+              draft: false,
+              prerelease: false,
+              generate_release_notes: true
+            });
+            
+            console.log(`Created release ${release.data.html_url}`);
+            
+            // Upload release assets
+            const files = [
+              'release-${{ steps.version.outputs.version }}.tar.gz',
+              'release-${{ steps.version.outputs.version }}.zip'
+            ];
+            
+            for (const file of files) {
+              console.log(`Uploading ${file}...`);
+              await github.rest.repos.uploadReleaseAsset({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                release_id: release.data.id,
+                name: file,
+                data: fs.readFileSync(file)
+              });
+            }
+      
+      - name: Update package.json version
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          # Extract version number without 'v' prefix
+          VERSION_NUM=$(echo "${{ steps.version.outputs.version }}" | sed 's/^v//')
+          
+          # Update package.json
+          npm version $VERSION_NUM --no-git-tag-version
+          
+          # Commit and push
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add package*.json
+          git commit -m "chore: update version to $VERSION_NUM [skip ci]"
+          git push

@@ -1,0 +1,105 @@
+name: Workflow Dashboard
+
+on:
+  schedule:
+    # Update dashboard every 6 hours
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+  push:
+    branches: [ main, master ]
+
+jobs:
+  update-dashboard:
+    name: Update Workflow Status Dashboard
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Generate dashboard
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const fs = require('fs');
+            
+            // Get all workflows
+            const workflows = await github.rest.actions.listRepoWorkflows({
+              owner: context.repo.owner,
+              repo: context.repo.repo
+            });
+            
+            let dashboardContent = `# GitHub Actions Dashboard 📊
+            
+            Last updated: ${new Date().toUTCString()}
+            
+            ## Workflow Status
+            
+            | Workflow | Status | Last Run | Duration |
+            |----------|--------|----------|----------|
+            `;
+            
+            for (const workflow of workflows.data.workflows) {
+              try {
+                // Get latest run for each workflow
+                const runs = await github.rest.actions.listWorkflowRuns({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  workflow_id: workflow.id,
+                  per_page: 1
+                });
+                
+                if (runs.data.workflow_runs.length > 0) {
+                  const run = runs.data.workflow_runs[0];
+                  const badge = run.conclusion === 'success' ? '✅' : 
+                               run.conclusion === 'failure' ? '❌' : 
+                               run.status === 'in_progress' ? '🔄' : '⏸️';
+                  
+                  const duration = run.run_started_at && run.updated_at ? 
+                    Math.round((new Date(run.updated_at) - new Date(run.run_started_at)) / 1000) : 0;
+                  
+                  const durationStr = duration > 60 ? 
+                    `${Math.floor(duration / 60)}m ${duration % 60}s` : 
+                    `${duration}s`;
+                  
+                  dashboardContent += `| ${workflow.name} | ${badge} ${run.conclusion || run.status} | ${new Date(run.created_at).toLocaleDateString()} | ${durationStr} |\n`;
+                } else {
+                  dashboardContent += `| ${workflow.name} | ⏸️ Never run | - | - |\n`;
+                }
+              } catch (error) {
+                console.error(`Error fetching runs for ${workflow.name}:`, error);
+              }
+            }
+            
+            // Add statistics
+            dashboardContent += `
+            
+            ## Statistics
+            
+            - Total workflows: ${workflows.data.total_count}
+            - Active workflows: ${workflows.data.workflows.filter(w => w.state === 'active').length}
+            
+            ## Quick Links
+            
+            - [View All Workflows](https://github.com/${context.repo.owner}/${context.repo.repo}/actions)
+            - [View All Runs](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs)
+            - [Workflow Usage](https://github.com/${context.repo.owner}/${context.repo.repo}/settings/actions)
+            `;
+            
+            // Write to file
+            fs.writeFileSync('WORKFLOW_DASHBOARD.md', dashboardContent);
+      
+      - name: Commit dashboard
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          if git diff --quiet WORKFLOW_DASHBOARD.md 2>/dev/null; then
+            echo "No changes to dashboard"
+          else
+            git add WORKFLOW_DASHBOARD.md
+            git commit -m "chore: update workflow dashboard [skip ci]"
+            git push
+          fi
