@@ -71,7 +71,7 @@ jobs:
       
       - name: Comment on PR
         if: github.event_name == 'pull_request' && steps.npm-audit.outputs.vulnerabilities > 0
-        uses: actions/github-script@v6
+        uses: actions/github-script@v8
         with:
           script: |
             github.rest.issues.createComment({

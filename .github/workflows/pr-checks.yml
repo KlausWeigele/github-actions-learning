@@ -34,7 +34,7 @@ jobs:
       
       - name: Get PR size
         id: size
-        uses: actions/github-script@v6
+        uses: actions/github-script@v8
         with:
           script: |
             const pr = context.payload.pull_request;
@@ -76,7 +76,7 @@ jobs:
             return label;
       
       - name: Comment PR size
-        uses: actions/github-script@v6
+        uses: actions/github-script@v8
         with:
           script: |
             const size = '${{ steps.size.outputs.result }}';
@@ -104,7 +104,7 @@ jobs:
     
     steps:
       - name: Check mergeable status
-        uses: actions/github-script@v6
+        uses: actions/github-script@v8
         with:
           script: |
             const pr = await github.rest.pulls.get({
@@ -125,7 +125,7 @@ jobs:
     
     steps:
       - name: Auto assign
-        uses: actions/github-script@v6
+        uses: actions/github-script@v8
         with:
           script: |
             // In a real project, you might assign based on code ownership
