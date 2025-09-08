@@ -102,7 +102,7 @@ jobs:
           zip -r release-${{ steps.version.outputs.version }}.zip release/
       
       - name: Create GitHub Release
-        uses: actions/github-script@v6
+        uses: actions/github-script@v8
         with:
           script: |
             const fs = require('fs');
