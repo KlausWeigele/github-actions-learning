@@ -44,7 +44,7 @@ jobs:
           echo "Custom workflow build version: ${{ needs.call-reusable-custom.outputs.build-version }}"
       
       - name: Download artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v6
         with:
           name: default-build
           path: ./artifacts/default
