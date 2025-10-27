@@ -84,7 +84,7 @@ jobs:
       
       - name: Upload build artifact
         if: ${{ inputs.run-build }}
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v5
         with:
           name: ${{ inputs.artifact-name }}
           path: dist/
